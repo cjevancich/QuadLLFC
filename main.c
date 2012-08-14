@@ -9,6 +9,7 @@
 #include "logging.h"
 #include "proto.h"
 #include "state.h"
+#include "gain.h"
 #include "control.h"
 #include "core/uart.h"
 #include "core/systick.h"
@@ -41,6 +42,7 @@ int main(void) {
 	logging_send_string(LOGGING_DEBUG, "Initializing accelerometer complete.");
 
 	state_init();
+	gain_init();
 	control_init();
 
 	logging_send_string(LOGGING_DEBUG, "Entering main control loop.");
@@ -48,6 +50,7 @@ int main(void) {
 	while(1) {
 		proto_update();
 		state_update();
+		gain_update();
 		control_update();
 		esc_update();
 	}

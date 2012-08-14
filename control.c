@@ -4,12 +4,9 @@
 #include "state.h"
 #include "esc.h"
 #include "logging.h"
+#include "gain.h"
 
 #define CONTROL_UPDATE_INTERVAL 20
-
-static state_t _control_p_gains[4];
-static state_t _control_i_gains[4];
-static state_t _control_d_gains[4];
 
 static uint32_t _control_last_update;
 static state_t _control_setpoint_error_last;
@@ -24,43 +21,15 @@ void control_init(void) {
 	// TODO
 	// Set the gain values
 	//
-	_control_p_gains[1].roll = -.065;
-	_control_p_gains[3].roll = .065;
-	_control_d_gains[1].roll = -440.0;
-	_control_d_gains[3].roll = 440.0;
-	_control_i_gains[1].roll = -.03;	
-	_control_i_gains[3].roll = .03;	
+	_control_integral_slice_max[0] = gain_get_p_pitch(0) * .05;
+	_control_integral_slice_max[1] = gain_get_p_roll(1) * .05;
+	_control_integral_slice_max[2] = gain_get_p_pitch(2) * .05;
+	_control_integral_slice_max[3] = gain_get_p_roll(3) * .05;
 
-	_control_p_gains[0].pitch = .065;
-	_control_p_gains[2].pitch = -.065;
-	_control_d_gains[0].pitch = 440.0;
-	_control_d_gains[2].pitch = -440.0;
-	_control_i_gains[0].roll = -.03;	
-	_control_i_gains[2].roll = .03;	
-
-	_control_p_gains[0].yaw = 0.075;
-	_control_p_gains[1].yaw = -0.075;
-	_control_p_gains[2].yaw = 0.075;
-	_control_p_gains[3].yaw = -0.075;
-	_control_d_gains[0].yaw = 240.0;
-	_control_d_gains[1].yaw = -240.0;
-	_control_d_gains[2].yaw = 240.0;
-	_control_d_gains[3].yaw = -240.0;
-
-	_control_p_gains[0].z = 1;
-	_control_p_gains[1].z = 1;
-	_control_p_gains[2].z = 1;
-	_control_p_gains[3].z = 1;
-
-	_control_integral_slice_max[0] = _control_p_gains[0].pitch * .05;
-	_control_integral_slice_max[1] = _control_p_gains[1].roll * .05;
-	_control_integral_slice_max[2] = _control_p_gains[2].pitch * .05;
-	_control_integral_slice_max[3] = _control_p_gains[3].roll * .05;
-
-	_control_integral_max[0] = _control_p_gains[0].pitch * .5;
-	_control_integral_max[1] = _control_p_gains[1].roll * .5;
-	_control_integral_max[2] = _control_p_gains[2].pitch * .5;
-	_control_integral_max[3] = _control_p_gains[3].roll * .5;
+	_control_integral_max[0] = gain_get_p_pitch(0) * .5;
+	_control_integral_max[1] = gain_get_p_roll(1) * .5;
+	_control_integral_max[2] = gain_get_p_pitch(2) * .5;
+	_control_integral_max[3] = gain_get_p_roll(3) * .5;
 }
 
 void control_reset(void) {
@@ -144,7 +113,7 @@ void control_update(void) {
 		state_scale(&error_dt, dt, &error_dt);
 
 		for(i = 0;i < 4;i++) {
-			float *motor_i_gains = (float*)(&_control_i_gains[i]);
+			float *motor_i_gains = (float*)(&control_get_i_gains()[i]);
 			motor_slice[i] = 0;
 			for(j = 0;j < 6;j++) {
 				motor_slice[i] += ((float*)&error_integral_slice)[j] * motor_i_gains[j];
@@ -177,14 +146,14 @@ void control_update(void) {
 	// Accumulate gains * error
         //p
         for(j = 0;j < 4;j++) {
-                motor_accum[j] += setpoint_error.roll*_control_p_gains[j].roll + setpoint_error.pitch*_control_p_gains[j].pitch +
-                        setpoint_error.yaw*_control_p_gains[j].yaw + setpoint_error.z*_control_p_gains[j].z;
+                motor_accum[j] += setpoint_error.roll*gain_get_p_roll(j) + setpoint_error.pitch*gain_get_p_pitch(j) +
+                        setpoint_error.yaw*gain_get_p_yaw(j) + setpoint_error.z*gain_get_p_z(j);
         }
 
         //d
         for(j = 0;j < 4;j++) {
-                motor_accum[j] += error_dt.roll*_control_d_gains[j].roll + error_dt.pitch*_control_d_gains[j].pitch +
-                        error_dt.yaw*_control_d_gains[j].yaw + error_dt.z*_control_d_gains[j].z;
+                motor_accum[j] += error_dt.roll*gain_get_d_roll(j) + error_dt.pitch*gain_get_d_pitch(j) +
+                        error_dt.yaw*gain_get_d_yaw(j) + error_dt.z*gain_get_d_z(j);
         }
 
         //i
@@ -193,17 +162,5 @@ void control_update(void) {
 
 	// Apply throttles
 	esc_set_all_throttles(motor_accum);
-}
-
-state_t *control_get_p_gains(void) {
-	return _control_p_gains;
-}
-
-state_t *control_get_i_gains(void) {
-	return _control_i_gains;
-}
-
-state_t *control_get_d_gains(void) {
-	return _control_d_gains;
 }
 
